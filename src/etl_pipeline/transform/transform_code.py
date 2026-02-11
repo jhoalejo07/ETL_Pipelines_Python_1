@@ -9,13 +9,23 @@ class Transform:
 
         self.data = self._transform()
 
+
     # =====================================================
     # Main orchestration
     # =====================================================
     def _transform(self) -> pd.DataFrame:
-        df = self._prepare_rentals()
-        df = self._join_segments(df)
-        df = self._apply_filters(df)
+        #df = self._prepare_rentals()
+        self.Column_To_Number1 = 'Equipment_Rental_Payment_Month'
+        self.column_to_join = 'Product_Code'
+        self.join_type = 'inner'
+        self.filter_column = 'Equipment_Rental_Payment_Month'
+        self.filter_operator = '>='
+        self.filter_value = 25
+
+
+        df = self._prepare_numeric_column(self.rentals, self.Column_To_Number1)
+        df = self._join_dataframes(df, self.segments, self.column_to_join, self.join_type)
+        df = self._apply_filters(df, self.filter_column, self.filter_operator, self.filter_value)
         df = self._select_columns(df)
 
         df = self._count_units_by_customer_site(df)
@@ -27,6 +37,7 @@ class Transform:
     # =====================================================
     # Existing logic (UNCHANGED)
     # =====================================================
+    '''
     def _prepare_rentals(self) -> pd.DataFrame:
         df = self.rentals.copy()
 
@@ -42,20 +53,67 @@ class Transform:
         )
 
         return df
+    '''
 
+    def _prepare_numeric_column(self, df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+        # Make a copy of the dataframe to avoid modifying the original
+        df_copy = df.copy()
+
+        # Clean the specified column by removing commas and converting to numeric
+        df_copy[column_name] = (
+            df_copy[column_name]
+            .astype(str)
+            .str.replace(',', '', regex=False)
+        )
+
+        # Convert the column to numeric, coerce any errors to NaN
+        df_copy[column_name] = pd.to_numeric(df_copy[column_name], errors='coerce')
+
+        return df_copy
+
+    '''
     def _join_segments(self, rentals_df: pd.DataFrame) -> pd.DataFrame:
         return rentals_df.merge(
             self.segments,
-            on='Product_code',
+            on='Product_Code',
             how='inner'
         )
+    '''
+    def _join_dataframes(self, df1: pd.DataFrame, df2: pd.DataFrame, column_to_join: str, join_type) -> pd.DataFrame:
+        return df1.merge(
+            df2,
+            on=column_to_join,
+            how=join_type
+        )
 
+    '''
     def _apply_filters(self, df: pd.DataFrame) -> pd.DataFrame:
         return df[df['Equipment_Rental_Payment_Month'] >= 25]
+    '''
+
+    def _apply_filters(self, df: pd.DataFrame, column_name: str, operator: str, value: float) -> pd.DataFrame:
+        # Define a dictionary to map logical operators to their corresponding pandas functions
+        operators = {
+            '>=': df[column_name] >= value,
+            '<=': df[column_name] <= value,
+            '>': df[column_name] > value,
+            '<': df[column_name] < value,
+            '==': df[column_name] == value,
+            '!=': df[column_name] != value
+        }
+
+        # Ensure the operator is valid
+        if operator not in operators:
+            raise ValueError(f"Invalid operator: {operator}. Supported operators are: {', '.join(operators.keys())}")
+
+        # Apply the filter based on the operator
+        return df[operators[operator]]
+
+
 
     def _select_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         return df[
-            ['MARKET_PLACE', 'Product_code', 'Segment', 'Customer_Site_ID']
+            ['MARKET_PLACE', 'Product_Code', 'Segment', 'Customer_Site_ID']
         ]
 
     # =====================================================

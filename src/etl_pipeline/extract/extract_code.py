@@ -43,6 +43,7 @@ class Extract:
         self.segments = self.read_file("segments.csv")
 
         # Column standardization (still extract)
+        '''
         self.rentals = self.rentals.rename(columns={
             "MARKET PLACE": "MARKET_PLACE",
             "Customer Site ID": "Customer_Site_ID",
@@ -51,12 +52,25 @@ class Extract:
             "Product Serial Number": "Product_Serial_Number",
             "Equipment Rental Payment/Month": "Equipment_Rental_Payment_Month",
         })
+        
 
         self.segments = self.segments.rename(columns={
             "Product code": "Product_code"
         })
+        '''
+        self.rentals = self.rename_columns(self.rentals)
+
+        self.segments = self.rename_columns(self.segments)
 
         return self.rentals, self.segments
+
+
+    def rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Rename columns by replacing spaces with underscores
+        df.columns = df.columns.str.replace(' ', '_', regex=False)
+        df.columns = df.columns.str.replace('/', '_', regex=False)
+        return df
+
 
 '''
 
