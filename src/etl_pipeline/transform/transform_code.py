@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
+from typing import List, Tuple
 from src.etl_pipeline.extract.extract_code import Extract
+
+
 
 
 class Transform:
@@ -14,22 +17,43 @@ class Transform:
     # Main orchestration
     # =====================================================
     def _transform(self) -> pd.DataFrame:
-        #df = self._prepare_rentals()
+        #Convert into numeric the field Equipment_Rental_Payment_Month
         self.Column_To_Number1 = 'Equipment_Rental_Payment_Month'
+        df = self._prepare_numeric_column(self.rentals, self.Column_To_Number1)
+
+        # Joining two dataframes
         self.column_to_join = 'Product_Code'
         self.join_type = 'inner'
+        df = self._join_dataframes(df, self.segments, self.column_to_join, self.join_type)
+
+        # Filter the result for a specific column
         self.filter_column = 'Equipment_Rental_Payment_Month'
         self.filter_operator = '>='
         self.filter_value = 25
-
-
-        df = self._prepare_numeric_column(self.rentals, self.Column_To_Number1)
-        df = self._join_dataframes(df, self.segments, self.column_to_join, self.join_type)
         df = self._apply_filters(df, self.filter_column, self.filter_operator, self.filter_value)
-        df = self._select_columns(df)
 
-        df = self._count_units_by_customer_site(df)
-        df = self._classify_unit_counts(df)
+        # Select from specific columns
+        self.cols_join = ['MARKET_PLACE', 'Product_Code', 'Segment', 'Customer_Site_ID']
+        df = self._select_columns(df, self.cols_join)
+
+        # Grouping by determinate columns and creating a new column counter
+        self.cols_groupby = ['MARKET_PLACE', 'Customer_Site_ID', 'Segment']
+        self.Counter_name = 'UnitCount'
+        df = self._groupby(df, self.cols_groupby, self.Counter_name)
+
+        # Create a new column to categorize the counter based on the ranges: '1-2', '3-5', '6 or more'
+        ranges = [(1, 2), (3, 5)]
+        labels = ['1-2', '3-5']
+
+        df = self._categorize_by_range(
+            df=df,
+            columns_to_keep=['MARKET_PLACE', 'Segment', 'UnitCount'],
+            value_column='UnitCount',
+            ranges=ranges,
+            labels=labels,
+            default_label='6 or more'
+        )
+
         df = self._build_marketplace_rollup(df)
 
         return df
@@ -110,15 +134,20 @@ class Transform:
         return df[operators[operator]]
 
 
-
+    '''
     def _select_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         return df[
             ['MARKET_PLACE', 'Product_Code', 'Segment', 'Customer_Site_ID']
         ]
+    '''
+
+    def _select_columns(self, df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+        return df[columns]
 
     # =====================================================
     # NEW METHODS (business logic)
     # =====================================================
+    '''
     def _count_units_by_customer_site(self, df: pd.DataFrame) -> pd.DataFrame:
         return (
             df
@@ -129,7 +158,19 @@ class Transform:
             .size()
             .rename(columns={'size': 'UnitCount'})
         )
+    '''
+    def _groupby(self, df: pd.DataFrame, columns_groupby: list[str], Counter_Name: str) -> pd.DataFrame:
+        return (
+            df
+            .groupby(
+                columns_groupby,
+                as_index=False
+            )
+            .size()
+            .rename(columns={'size': Counter_Name})
+        )
 
+    '''
     def _classify_unit_counts(self, df: pd.DataFrame) -> pd.DataFrame:
         result = df[['MARKET_PLACE', 'Segment', 'UnitCount']].copy()
 
@@ -147,6 +188,56 @@ class Transform:
         )
 
         return result
+    '''
+
+    def _categorize_by_range(self,
+            df: pd.DataFrame,
+            columns_to_keep: List[str],
+            value_column: str,
+            ranges: List[Tuple[int, int]],
+            labels: List[str],
+            default_label: str
+    ) -> pd.DataFrame:
+        """
+        Classifies a numeric column into categories based on provided ranges.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Input DataFrame
+        columns_to_keep : list of str
+            Columns to retain in the result
+        value_column : str
+            Column to classify
+        ranges : list of tuples
+            List of (min, max) ranges (inclusive)
+        labels : list of str
+            Labels corresponding to each range
+        default_label : str
+            Label assigned when no range matches
+        """
+
+        if len(ranges) != len(labels):
+            raise ValueError("The number of ranges and labels must be the same")
+
+        result = df[columns_to_keep].copy()
+
+        conditions = [
+            result[value_column].between(min_val, max_val)
+            for min_val, max_val in ranges
+        ]
+
+        result['Category'] = np.select(
+            conditions,
+            labels,
+            default=default_label
+        )
+
+        return result
+
+
+
+
 
     def _build_marketplace_rollup(
         self,
