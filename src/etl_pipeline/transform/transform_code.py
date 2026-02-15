@@ -4,8 +4,6 @@ from typing import List, Tuple
 from src.etl_pipeline.extract.extract_code import Extract
 
 
-
-
 class Transform:
     def __init__(self, extract: Extract):
         self.rentals, self.segments = extract.extract()
@@ -54,7 +52,36 @@ class Transform:
             default_label='6 or more'
         )
 
-        df = self._build_marketplace_rollup(df)
+        #df = self._build_marketplace_rollup(df)
+        # Step 1: Base rollup this is a pivot function with two rows values to pass to be columns
+        base = self._create_base_rollup(
+            df=df,
+            group_col_1='MARKET_PLACE',
+            group_col_2='Category',
+            value_column='Segment',
+            value_1='Seg 1-3',
+            value_2='Seg 4-6'
+        )
+
+        subtotal = self._create_subtotal(
+            base_df=base,
+            group_col_1='MARKET_PLACE',
+            group_col_2='Category'
+        )
+
+        grand_total = self._create_grand_total(
+            base_df=base,
+            group_col_1='MARKET_PLACE',
+            group_col_2='Category'
+        )
+
+        df = pd.concat([base, subtotal, grand_total], ignore_index=True)
+
+        df = self._sort_rollup_result(
+            df=df,
+            group_col_1='MARKET_PLACE',
+            group_col_2='Category'
+        )
 
         return df
 
@@ -236,9 +263,132 @@ class Transform:
         return result
 
 
+    def _create_base_rollup(self,
+            df,
+            group_col_1: str,
+            group_col_2: str,
+            value_column: str,
+            value_1: str,
+            value_2: str
+    ):
+        """
+        Groups the dataframe by two columns
+        and counts how many times value_1 and value_2 appear.
+        """
 
+        base = (
+            df
+            .groupby([group_col_1, group_col_2], dropna=False)
+            .agg(
+                count_value_1=(value_column, lambda x: (x == value_1).sum()),
+                count_value_2=(value_column, lambda x: (x == value_2).sum()),
+                total_count=(value_column, "count")
+            )
+            .reset_index()
+        )
 
+        return base
 
+    # This creates subtotal using the result of function 1.
+    def _create_subtotal(self,
+            base_df,
+            group_col_1: str,
+            group_col_2: str,
+            total_label: str = "Total"
+        ):
+        """
+        Creates subtotal by summing numeric columns
+        grouped by the first column.
+        """
+
+        subtotal = (
+            base_df
+            .groupby(group_col_1, as_index=False)
+            .sum(numeric_only=True)
+        )
+
+        # Put "Total" in second grouping column
+        subtotal[group_col_2] = total_label
+
+        return subtotal
+
+    # This creates one final row with everything summed.
+    def _create_grand_total( self,
+            base_df,
+            group_col_1: str,
+            group_col_2: str,
+            grand_total_label: str = "Grand Total",
+            total_label: str = "Total"
+    ):
+        """
+        Creates one single row with the total of everything.
+        """
+
+        totals = base_df.sum(numeric_only=True)
+
+        grand_total_row = {
+            group_col_1: grand_total_label,
+            group_col_2: total_label
+        }
+
+        # Add numeric totals
+        for col in base_df.select_dtypes(include="number").columns:
+            grand_total_row[col] = totals[col]
+
+        return pd.DataFrame([grand_total_row])
+
+    def _sort_rollup_result( self,
+            df,
+            group_col_1: str,
+            group_col_2: str,
+            total_label: str = "Total",
+            grand_total_label: str = "Grand Total"
+    ):
+        """
+        Sorts the rollup result so that:
+
+        1. Normal rows appear first
+        2. Subtotals (Total) appear after their group
+        3. Grand Total appears at the very bottom
+        """
+
+        # ---------------------------------------------------------
+        # STEP 1:
+        # Create a temporary column to identify Grand Total rows
+        # True = is Grand Total
+        # False = normal row
+        # ---------------------------------------------------------
+        df["_group1_sort"] = df[group_col_1] == grand_total_label
+
+        # ---------------------------------------------------------
+        # STEP 2:
+        # Create a temporary column to identify subtotal rows
+        # True = is subtotal
+        # False = normal row
+        # ---------------------------------------------------------
+        df["_group2_sort"] = df[group_col_2] == total_label
+
+        # ---------------------------------------------------------
+        # STEP 3:
+        # Sort using:
+        # 1) Grand Total flag
+        # 2) First grouping column
+        # 3) Subtotal flag
+        # 4) Second grouping column
+        # ---------------------------------------------------------
+        df = df.sort_values(
+            by=["_group1_sort", group_col_1, "_group2_sort", group_col_2]
+        )
+
+        # ---------------------------------------------------------
+        # STEP 4:
+        # Remove temporary helper columns
+        # ---------------------------------------------------------
+        df = df.drop(columns=["_group1_sort", "_group2_sort"])
+
+        return df
+
+    '''
     def _build_marketplace_rollup(
         self,
         df: pd.DataFrame,
@@ -301,3 +451,4 @@ class Transform:
         )
 
         return result
+    '''
