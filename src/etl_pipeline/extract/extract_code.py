@@ -7,8 +7,8 @@ from pathlib import Path
 
 class Extract:
     def __init__(self):
-        self.rentals = None
-        self.segments = None
+        self.df1 = None
+        self.df2 = None
 
     def read_file(self, filename: str, **kwargs) -> pd.DataFrame:
         """
@@ -39,8 +39,8 @@ class Extract:
         """
 
         # Load files
-        self.rentals = self.read_file("raw_data.csv")
-        self.segments = self.read_file("segments.csv")
+        self.df1 = self.read_file("raw_data.csv")
+        self.df2 = self.read_file("segments.csv")
 
         # Column standardization (still extract)
         '''
@@ -58,11 +58,11 @@ class Extract:
             "Product code": "Product_code"
         })
         '''
-        self.rentals = self.rename_columns(self.rentals)
+        self.df1 = self.rename_columns(self.df1)
 
-        self.segments = self.rename_columns(self.segments)
+        self.df2 = self.rename_columns(self.df2)
 
-        return self.rentals, self.segments
+        return self.df1, self.df2
 
 
     def rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:

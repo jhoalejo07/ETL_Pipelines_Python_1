@@ -2,12 +2,13 @@ import pandas as pd
 import numpy as np
 from typing import List, Tuple
 from src.etl_pipeline.extract.extract_code import Extract
+from src.etl_pipeline.utils.SQL_with_Dataframes import SQl_df
 
 
 class Transform:
     def __init__(self, extract: Extract):
-        self.rentals, self.segments = extract.extract()
-
+        self.df1, self.df2 = extract.extract()
+        self.sql_df = SQl_df()
         self.data = self._transform()
 
 
@@ -15,20 +16,21 @@ class Transform:
     # Main orchestration
     # =====================================================
     def _transform(self) -> pd.DataFrame:
-        #Convert into numeric the field Equipment_Rental_Payment_Month
+
+        # Convert into numeric the field Equipment_Rental_Payment_Month
         self.Column_To_Number1 = 'Equipment_Rental_Payment_Month'
-        df = self._prepare_numeric_column(self.rentals, self.Column_To_Number1)
+        df = self.sql_df.convert_to_numeric(self.df1, self.Column_To_Number1)
 
         # Joining two dataframes
         self.column_to_join = 'Product_Code'
         self.join_type = 'inner'
-        df = self._join_dataframes(df, self.segments, self.column_to_join, self.join_type)
+        df = self.sql_df.join_dataframes(df, self.df2, self.column_to_join, self.join_type)
 
         # Filter the result for a specific column
         self.filter_column = 'Equipment_Rental_Payment_Month'
         self.filter_operator = '>='
         self.filter_value = 25
-        df = self._apply_filters(df, self.filter_column, self.filter_operator, self.filter_value)
+        df = self.sql_df.apply_filters(df, self.filter_column, self.filter_operator, self.filter_value)
 
         # Select from specific columns
         self.cols_join = ['MARKET_PLACE', 'Product_Code', 'Segment', 'Customer_Site_ID']
@@ -52,7 +54,6 @@ class Transform:
             default_label='6 or more'
         )
 
-        #df = self._build_marketplace_rollup(df)
         # Step 1: Base rollup this is a pivot function with two rows values to pass to be columns
         base = self._create_base_rollup(
             df=df,
@@ -105,7 +106,7 @@ class Transform:
 
         return df
     '''
-
+    '''
     def _prepare_numeric_column(self, df: pd.DataFrame, column_name: str) -> pd.DataFrame:
         # Make a copy of the dataframe to avoid modifying the original
         df_copy = df.copy()
@@ -121,7 +122,7 @@ class Transform:
         df_copy[column_name] = pd.to_numeric(df_copy[column_name], errors='coerce')
 
         return df_copy
-
+    '''
     '''
     def _join_segments(self, rentals_df: pd.DataFrame) -> pd.DataFrame:
         return rentals_df.merge(
@@ -129,17 +130,18 @@ class Transform:
             on='Product_Code',
             how='inner'
         )
-    '''
+    
     def _join_dataframes(self, df1: pd.DataFrame, df2: pd.DataFrame, column_to_join: str, join_type) -> pd.DataFrame:
         return df1.merge(
             df2,
             on=column_to_join,
             how=join_type
         )
-
+    '''
     '''
     def _apply_filters(self, df: pd.DataFrame) -> pd.DataFrame:
         return df[df['Equipment_Rental_Payment_Month'] >= 25]
+    
     '''
 
     def _apply_filters(self, df: pd.DataFrame, column_name: str, operator: str, value: float) -> pd.DataFrame:
