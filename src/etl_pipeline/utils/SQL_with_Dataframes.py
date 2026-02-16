@@ -46,3 +46,19 @@ class SQl_df():
 
         # Apply the filter based on the operator
         return df[operators[operator]]
+
+
+    def df_select_columns(self, df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+        return df[columns]
+
+    def df_groupby(self, df: pd.DataFrame, columns_groupby: list[str], Counter_Name: str) -> pd.DataFrame:
+        return (
+            df
+            .groupby(
+                columns_groupby,
+                as_index=False
+            )
+            .size()
+            .rename(columns={'size': Counter_Name})
+        )
+
