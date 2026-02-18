@@ -160,6 +160,7 @@ class Transform:
             )
             .reset_index()
         )
+        base = base.rename(columns={"count_value_1": value_1, "count_value_2": value_2, "total_count": "Grand_Total"})
 
         return base
 

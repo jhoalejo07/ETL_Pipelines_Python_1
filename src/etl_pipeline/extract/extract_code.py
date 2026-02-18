@@ -1,7 +1,4 @@
-
-
 import pandas as pd
-import os
 from pathlib import Path
 
 
@@ -43,21 +40,6 @@ class Extract:
         self.df2 = self.read_file("segments.csv")
 
         # Column standardization (still extract)
-        '''
-        self.rentals = self.rentals.rename(columns={
-            "MARKET PLACE": "MARKET_PLACE",
-            "Customer Site ID": "Customer_Site_ID",
-            "Customer Name": "Customer_Name",
-            "Product Code": "Product_code",
-            "Product Serial Number": "Product_Serial_Number",
-            "Equipment Rental Payment/Month": "Equipment_Rental_Payment_Month",
-        })
-        
-
-        self.segments = self.segments.rename(columns={
-            "Product code": "Product_code"
-        })
-        '''
         self.df1 = self.rename_columns(self.df1)
 
         self.df2 = self.rename_columns(self.df2)
@@ -71,42 +53,4 @@ class Extract:
         df.columns = df.columns.str.replace('/', '_', regex=False)
         return df
 
-
-'''
-
-import pandas as pd
-from pathlib import Path
-
-class Extract:
-    def __init__(self, path: str):
-            # self.data = self._extract()
-            self.path = path
-
-    def _read_file(self) -> pd.DataFrame:
-            """
-            Generic file reader (internal to Extract).
-            """
-            path = Path(self.path)
-            ext = path.suffix.lower()
-
-            if ext == ".csv":
-                return pd.read_csv(path)
-            elif ext == ".parquet":
-                return pd.read_parquet(path)
-            elif ext == ".json":
-                return pd.read_json(path)
-            elif ext in (".xls", ".xlsx"):
-                return pd.read_excel(path)
-            else:
-                raise ValueError(f"Unsupported file type: {ext}")
-
-    def _extract(self):
-            """
-            Extract multiple sources.
-            """
-            df = self._read_file(self.path)
-
-            return {"dataframe": df}
-
-'''
 
