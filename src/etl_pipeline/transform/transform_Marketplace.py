@@ -1,30 +1,52 @@
 import pandas as pd
-import numpy as np
-from typing import List, Tuple
-from src.etl_pipeline.extract.extract_Marketplace import Extract
 from src.etl_pipeline.utils.SQL_with_Dataframes import SQl_df
 
 
 class Transform:
-    def __init__(self, extract: Extract):
-        self.df1, self.df2 = extract.extract()
+    def __init__(self, raw_data: dict):
+        """
+        Initialize the transform class with raw data from Extract.
+        """
+        self.dataframes = raw_data
         self.sql_df = SQl_df()
         self.data = self._transform()
 
+    def _rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Rename columns by replacing spaces and slashes with underscores.
+        """
+        df.columns = df.columns.str.replace(' ', '_', regex=False)
+        df.columns = df.columns.str.replace('/', '_', regex=False)
+        return df
 
     # =====================================================
-    # Main orchestration
+    # Transformation Logic
     # =====================================================
     def _transform(self) -> pd.DataFrame:
 
+        """
+        Perform all transformations, including column renaming, and return transformed data.
+        """
+        for filename, df in self.dataframes.items():
+            # Apply the rename_columns transformation
+            self.dataframes[filename] = self._rename_columns(df)
+
+        # Unpack dynamically
+        dfs = list(self.dataframes.values())
+
+        if len(dfs) < 2:
+            raise ValueError("At least two dataframes are required for this transformation.")
+
+        df1, df2 = dfs[:2]  # works even if there are more
+
         # Convert into numeric the field Equipment_Rental_Payment_Month
         self.Column_To_Number1 = 'Equipment_Rental_Payment_Month'
-        df = self.sql_df.convert_to_numeric(self.df1, self.Column_To_Number1)
+        df = self.sql_df.convert_to_numeric(df1, self.Column_To_Number1)
 
         # Joining two dataframes
         self.column_to_join = 'Product_Code'
         self.join_type = 'inner'
-        df = self.sql_df.join_dataframes(df, self.df2, self.column_to_join, self.join_type)
+        df = self.sql_df.join_dataframes(df, df2, self.column_to_join, self.join_type)
 
         # Filter the result for a specific column
         self.filter_column = 'Equipment_Rental_Payment_Month'
@@ -55,7 +77,6 @@ class Transform:
             new_column_name='Category'
         )
 
-
         base = self.sql_df.df_pivot_2values_to_2columns(
             df=df,
             group_col_1='MARKET_PLACE',
@@ -71,7 +92,6 @@ class Transform:
             group_col_2='Category'
         )
 
-
         df = pd.concat([base, totals], ignore_index=True)
 
         df = self.sql_df.df_orderby_grouping(
@@ -81,10 +101,3 @@ class Transform:
         )
 
         return df
-
-
-    # =====================================================
-    # METHODS (business logic)
-    # =====================================================
-
-
