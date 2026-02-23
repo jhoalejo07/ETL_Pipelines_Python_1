@@ -51,7 +51,7 @@ class SQl_df():
     def df_select_columns(self, df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
         return df[columns]
 
-    def df_groupby(self, df: pd.DataFrame, columns_groupby: list[str], Counter_Name: str) -> pd.DataFrame:
+    def df_groupby_count(self, df: pd.DataFrame, columns_groupby: list[str], Counter_Name: str) -> pd.DataFrame:
         return (
             df
             .groupby(
@@ -60,6 +60,12 @@ class SQl_df():
             )
             .size()
             .rename(columns={'size': Counter_Name})
+        )
+    def df_groupby(self, df: pd.DataFrame, columns_groupby: list[str], Agg_Name: str, column_to_agg: str, agg_func: str) -> pd.DataFrame:
+        return (
+            df
+            .groupby(columns_groupby, as_index=False)
+            .agg(**{Agg_Name: (column_to_agg, agg_func)})
         )
 
     def df_case(self,
@@ -137,6 +143,32 @@ class SQl_df():
         base = base.rename(columns={"count_value_1": value_1, "count_value_2": value_2, "total_count": "Grand_Total"})
 
         return base
+
+    def df_pivot_values_to_columns(
+            self,
+            df,
+            group_col_1,
+            group_col_2,
+            value_column,
+            values
+    ):
+
+        pivot = (
+            df[df[value_column].isin(values)]
+            .pivot_table(
+                index=[group_col_1, group_col_2],
+                columns=value_column,
+                aggfunc="size",
+                fill_value=0
+            )
+            .reset_index()
+        )
+
+        pivot["Grand_Total"] = pivot[values].sum(axis=1)
+
+        return pivot
+
+
 
     def df_groupby_rollup(self,
                   base_df,
