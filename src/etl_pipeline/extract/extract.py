@@ -4,27 +4,27 @@ from pathlib import Path
 
 class Extract:
     def __init__(self, *filenames: str):
-        #self.df1 = None
-        #self.df2 =
         """
-        Constructor accepts a variable number of filenames.
+        Initializes Extract layer.
+        Accepts multiple filenames and loads them dynamically into a dictionary.
         """
-        self.dataframes = {}  # Store all dataframes in a dictionary
+        self.dataframes = {}
+
+        # Dynamically read all input files
         for filename in filenames:
-            # Read each file and store in the dictionary
             self.dataframes[filename] = self.read_files(filename)
 
     def read_files(self, filename: str, **kwargs) -> pd.DataFrame:
         """
-        Generic file reader for the Extract layer.
-        Supports CSV, Excel and Parquet.
+        Generic file reader.
+        Automatically detects file extension and selects appropriate pandas loader.
         """
 
         base_path = Path("data") / "raw"
         file_path = base_path / filename
-
         extension = file_path.suffix.lower()
 
+        # Dynamic dispatch based on extension
         if extension == ".csv":
             return pd.read_csv(file_path, **kwargs)
 
@@ -39,8 +39,8 @@ class Extract:
 
     def extract(self):
         """
-        Extracts the data and returns raw DataFrames.
+        Returns raw DataFrames as a dictionary.
         """
-        return self.dataframes  # Return the raw dataframes as they are
+        return self.dataframes
 
 

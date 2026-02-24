@@ -5,11 +5,13 @@ from src.etl_pipeline.utils.SQL_with_Dataframes import SQl_df
 class Transform:
     def __init__(self, raw_data: dict):
         """
-        Initialize the transform class with raw data from Extract.
+        Transformation layer for Marketplace.
+        Receives raw data dictionary and executes SQL-like transformations.
         """
+
         self.dataframes = raw_data
-        self.sql_df = SQl_df()
-        self.data = self._transform()
+        self.sql_df = SQl_df()  # SQL abstraction layer
+        self.data = self._transform()  # Execute transformation pipeline
 
     def _rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -19,75 +21,77 @@ class Transform:
         df.columns = df.columns.str.replace('/', '_', regex=False)
         return df
 
-    # =====================================================
-    # Transformation Logic
-    # =====================================================
-    def _transform(self) -> pd.DataFrame:
 
+    def _transform(self) -> pd.DataFrame:
         """
-        Perform all transformations, including column renaming, and return transformed data.
+        Core transformation pipeline.
+        Implements SQL-inspired operations using abstraction layer.
         """
+
+        # Normalize column names
         for filename, df in self.dataframes.items():
-            # Apply the rename_columns transformation
             self.dataframes[filename] = self._rename_columns(df)
 
-        # Unpack dynamically
+        # Dynamic unpacking of input datasets
+        # Convert the dictionary of DataFrames into a list.
+        # self.dataframes is a dictionary where:- keys: identifiers - values: pandas DataFrame
         dfs = list(self.dataframes.values())
-
         if len(dfs) < 2:
-            raise ValueError("At least two dataframes are required for this transformation.")
+            # Ensure that at least two DataFrames are available.
+            raise ValueError("At least two dataframes are required.")
 
-        df1, df2 = dfs[:2]  # works even if there are more
+        # Extract the first two DataFrames from the list.
+        df1, df2 = dfs[:2]
 
-        # Convert into numeric the field Equipment_Rental_Payment_Month
-        self.Column_To_Number1 = 'Equipment_Rental_Payment_Month'
-        df = self.sql_df.convert_to_numeric(df1, self.Column_To_Number1)
+        # =====================================================
+        # Business rule Logic SQL_with_Dataframes
+        # =====================================================
 
-        # Joining two dataframes
-        self.column_to_join = 'Product_Code'
-        self.join_type = 'inner'
-        df = self.sql_df.join_dataframes(df, df2, self.column_to_join, self.join_type)
+        # Convert text-based numeric column into real numeric type
+        df = self.sql_df.convert_to_numeric(df1, 'Equipment_Rental_Payment_Month')
 
-        # Filter the result for a specific column
-        self.filter_column = 'Equipment_Rental_Payment_Month'
-        self.filter_operator = '>='
-        self.filter_value = 25
-        df = self.sql_df.apply_filters(df, self.filter_column, self.filter_operator, self.filter_value)
+        # Perform relational inner join
+        df = self.sql_df.join_dataframes(df, df2, 'Product_Code', 'inner')
 
-        # Select from specific columns
-        self.cols_join = ['MARKET_PLACE', 'Product_Code', 'Segment', 'Customer_Site_ID']
-        df = self.sql_df.df_select_columns(df, self.cols_join)
+        # Apply business filter condition
+        df = self.sql_df.apply_filters(df, 'Equipment_Rental_Payment_Month', '>=', 25)
 
-        # Grouping by determinate columns and creating a new column counter
-        self.cols_groupby = ['MARKET_PLACE', 'Customer_Site_ID', 'Segment']
-        self.Counter_name = 'UnitCount'
-        self.column_to_agg = 'Customer_Site_ID'
-        df = self.sql_df.df_groupby(df, self.cols_groupby, self.Counter_name, self.column_to_agg, "count")
-        #df = self.sql_df.df_groupby_count(df, self.cols_groupby, self.Counter_name)
+        # Project required columns (SELECT equivalent)
+        df = self.sql_df.df_select_columns(
+            df,
+            ['MARKET_PLACE', 'Product_Code', 'Segment', 'Customer_Site_ID']
+        )
 
-        # Create a new column to categorize the counter based on the ranges: '1-2', '3-5', '6 or more'
-        ranges = [(1, 2), (3, 5)]
-        labels = ['1-2', '3-5']
+        # Aggregate count per grouping dimensions
+        df = self.sql_df.df_groupby(
+            df,
+            ['MARKET_PLACE', 'Customer_Site_ID', 'Segment'],
+            'UnitCount',
+            'Customer_Site_ID',
+            "count"
+        )
 
+        # Create categorical segmentation (CASE WHEN equivalent)
         df = self.sql_df.df_case(
             df=df,
             columns_to_keep=['MARKET_PLACE', 'Segment', 'UnitCount'],
             value_column='UnitCount',
-            ranges=ranges,
-            labels=labels,
+            ranges=[(1, 2), (3, 5)],
+            labels=['1-2', '3-5'],
             default_label='6 or more',
             new_column_name='Category'
         )
 
-        base = self.sql_df.df_pivot_2values_to_2columns(
+        # Pivot segment values into columns
+        base = self.sql_df.df_pivot_values_to_columns(
             df=df,
             group_col_1='MARKET_PLACE',
             group_col_2='Category',
             value_column='Segment',
-            value_1='Seg 1-3',
-            value_2='Seg 4-6'
+            values=['Seg 1-3', 'Seg 4-6']
         )
 
+        # Add subtotal and grand total rows (ROLLUP equivalent)
         totals = self.sql_df.df_groupby_rollup(
             base_df=base,
             group_col_1='MARKET_PLACE',
@@ -96,8 +100,9 @@ class Transform:
 
         df = pd.concat([base, totals], ignore_index=True)
 
+        # Order data respecting grouping hierarchy
         df = self.sql_df.df_orderby_grouping(
-            df=df,
+            df,
             group_col_1='MARKET_PLACE',
             group_col_2='Category'
         )

@@ -5,13 +5,13 @@ from src.etl_pipeline.utils.SQL_with_Dataframes import SQl_df
 class Transform:
     def __init__(self, raw_data: dict):
         """
-        Initialize the transform class,
-        assigns raw data from extract class,
-        initialize sql_df to handle SQL_with_dataframes .
+        Transformation layer for Marketplace.
+        Receives raw data dictionary and executes SQL-like transformations.
         """
+
         self.dataframes = raw_data
-        self.sql_df = SQl_df()
-        self.data = self._transform()
+        self.sql_df = SQl_df()  # SQL abstraction layer
+        self.data = self._transform()  # Execute transformation pipeline
 
     def _rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -25,84 +25,69 @@ class Transform:
     # Transformation Logic
     # =====================================================
     def _transform(self) -> pd.DataFrame:
+        """
+        Hospital billing transformation pipeline.
+        Implements numeric conversion, filtering, categorization and rollup.
+        """
 
-        """
-        1st Step. column renaming for each dataframe
-        """
+        # Normalize column names
         for filename, df in self.dataframes.items():
-            # Apply the rename_columns transformation
             self.dataframes[filename] = self._rename_columns(df)
 
-        """
-        2nd Step. # Unpack dynamically
-        """
-        dfs = list(self.dataframes.values())
+        # Dynamic unpacking of input datasets
+        # Convert the dictionary of DataFrames into a list.
+        # self.dataframes is a dictionary where:- keys: identifiers - values: pandas DataFrame
+        df1, df2 = list(self.dataframes.values())[:2]
 
-        if len(dfs) < 2:
-            raise ValueError("At least two dataframes are required for this transformation.")
+        # Ensure BillAmount is numeric
+        df = self.sql_df.convert_to_numeric(df1, 'BillAmount')
 
-        df1, df2 = dfs[:2]  # works even if there are more
+        # Relational join with AgeRange reference table
+        df = self.sql_df.join_dataframes(df, df2, 'AgeRangeID', 'inner')
 
-        # Convert into numeric the field BillAmount
-        self.Column_To_Number1 = 'BillAmount'
-        df = self.sql_df.convert_to_numeric(df1, self.Column_To_Number1)
+        # Business threshold filter
+        df = self.sql_df.apply_filters(df, 'BillAmount', '>=', 1000)
 
-        # Joining two dataframes
-        self.column_to_join = 'AgeRangeID'
-        self.join_type = 'inner'
-        df = self.sql_df.join_dataframes(df, df2, self.column_to_join, self.join_type)
+        # Projection
+        df = self.sql_df.df_select_columns(
+            df,
+            ['Province', 'PatientID', 'AgeRangeLabel', 'Hospital', 'BillAmount']
+        )
 
-        '''
-        # Grouping by determinate average and creating a new variable
-        self.cols_groupby = ['BillAmount']
-        self.agg_name = 'AvgBillAmount'
-        self.column_to_agg = 'BillAmount'
-        df_avg = self.sql_df.df_groupby(df, self.cols_groupby, self.agg_name, self.column_to_agg, "mean")
-        '''
-        # Filter the result for a specific column
-        self.filter_column = 'BillAmount'
-        self.filter_operator = '>='
-        self.filter_value = 1000
-        df = self.sql_df.apply_filters(df, self.filter_column, self.filter_operator, self.filter_value)
-
-        # Select from specific columns
-        self.cols_join = ['Province', 'PatientID', 'AgeRangeLabel', 'Hospital', 'BillAmount']
-        df = self.sql_df.df_select_columns(df, self.cols_join)
-
-        # Create a new column to categorize the counter based on the ranges: '1-2', '3-5', '6 or more'
-        ranges = [(1000, 5000), (5001, 9999)]
-        labels = ['<5000', '<10000']
-
+        # CASE classification for billing ranges
         df = self.sql_df.df_case(
             df=df,
             columns_to_keep=['Province', 'AgeRangeLabel', 'PatientID', 'BillAmount'],
             value_column='BillAmount',
-            ranges=ranges,
-            labels=labels,
-            default_label='>10000',
-            new_column_name='Category'
+            ranges=[(1000, 5000), (5001, 9999)],
+            labels=['1.0-5k', '2.5k-10k'],
+            default_label='3.10k +',
+            new_column_name='Bill_Amt_Cat'
         )
 
+        # Pivot age groups into columns
         base = self.sql_df.df_pivot_values_to_columns(
             df=df,
             group_col_1='Province',
-            group_col_2='Category',
+            group_col_2='Bill_Amt_Cat',
             value_column='AgeRangeLabel',
             values=['Child', 'Adult', 'Elderly']
         )
 
+        # Add subtotal and grand total rows (ROLLUP equivalent)
         totals = self.sql_df.df_groupby_rollup(
             base_df=base,
             group_col_1='Province',
-            group_col_2='Category'
+            group_col_2='Bill_Amt_Cat'
         )
 
         df = pd.concat([base, totals], ignore_index=True)
 
+        # Order data respecting grouping hierarchy
         df = self.sql_df.df_orderby_grouping(
-            df=df,
+            df,
             group_col_1='Province',
-            group_col_2='Category'
+            group_col_2='Bill_Amt_Cat'
         )
 
         return df
