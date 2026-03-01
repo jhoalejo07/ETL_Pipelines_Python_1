@@ -13,14 +13,6 @@ class Transform:
         self.sql_df = SQl_df()  # SQL abstraction layer
         self.data = self._transform()  # Execute transformation pipeline
 
-    def _rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Rename columns by replacing spaces and slashes with underscores.
-        """
-        df.columns = df.columns.str.replace(' ', '_', regex=False)
-        df.columns = df.columns.str.replace('/', '_', regex=False)
-        return df
-
     # =====================================================
     # Transformation Logic
     # =====================================================
@@ -32,7 +24,7 @@ class Transform:
 
         # Normalize column names
         for filename, df in self.dataframes.items():
-            self.dataframes[filename] = self._rename_columns(df)
+            self.dataframes[filename] = self.sql_df.rename_columns(df)
 
         # Dynamic unpacking of input datasets
         # Convert the dictionary of DataFrames into a list.

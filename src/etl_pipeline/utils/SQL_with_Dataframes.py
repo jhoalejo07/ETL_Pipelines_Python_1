@@ -16,6 +16,14 @@ class SQl_df():
         """
         pass
 
+    def rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Rename columns by replacing spaces and slashes with underscores.
+        """
+        df.columns = df.columns.str.replace(' ', '_', regex=False)
+        df.columns = df.columns.str.replace('/', '_', regex=False)
+        return df
+
     def convert_to_numeric(self, df: pd.DataFrame, column_name: str) -> pd.DataFrame:
         """
         Converts a column to numeric type.  Also removes commas before converting.
@@ -95,7 +103,7 @@ class SQl_df():
 
         return (
             df
-            # Group rows by the selected columns
+            # Group rows by the columns passed on the list
             .groupby(columns_groupby, as_index=False)
             # Apply an aggregation (agg_func) on the column indicated (column_to_agg) and create a new column (Agg_Name)
             .agg(**{Agg_Name: (column_to_agg, agg_func)})
@@ -122,17 +130,17 @@ class SQl_df():
         # Work on selected columns only
         result = df[columns_to_keep].copy()
 
-        # Create conditions for each range
+        # check each value_column in every range and create a boolean list true is in the range or false if isn't
         conditions = [
             result[value_column].between(min_val, max_val)
             for min_val, max_val in ranges
         ]
 
-        # Assign labels based on conditions
+        # Assigns labels based on if the condition is true the range put the respective label
         result[new_column_name] = np.select(
             conditions,
             labels,
-            default=default_label
+            default=default_label  # in case condition is false for every range assigns default value
         )
 
         return result
